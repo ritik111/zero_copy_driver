@@ -1,82 +1,51 @@
-High-Performance Zero-Copy Ring Buffer Driver
+# High-Performance Zero-Copy Ring Buffer Driver
+
+[![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](https://opensource.org/licenses/GPL-3.0)
+[![Linux Kernel](https://img.shields.io/badge/Linux-Kernel%206.x-orange.svg)](https://kernel.org)
+[![Language](https://img.shields.io/badge/Language-C-green.svg)](https://en.cppreference.com/w/c)
 
 A Linux kernel character device driver that implements a Zero-Copy Data Plane using memory mapping (mmap) and a simulated DMA engine via kernel timers. This project demonstrates high-efficiency communication between Kernel-space and User-space, suitable for high-throughput applications like FPGA data acquisition or software-defined radio.
  Key Features
 
-    Zero-Copy Memory Mapping: Utilizes remap_pfn_range to map kernel-allocated pages directly into user-space, bypassing the overhead of copy_to_user syscalls.
+---
 
-    Asynchronous Notification: Implements the poll subsystem with wait-queues to allow user-space applications to sleep efficiently while waiting for data.
+##  Key Features
 
-    Simulated DMA Engine: A kernel timer_list simulates hardware interrupts, producing data bursts at configurable intervals (default: 50ms).
 
-    Atomic Telemetry: Uses atomic primitives (__sync_fetch_and_add) to track produced, consumed, and overflowed bytes across CPU cores without race conditions.
 
-    Flow Control: Robust handling of buffer overflow (backpressure) scenarios with a dedicated overflow counter.
+* **Zero-Copy Memory Mapping:** Utilizes remap_pfn_range to map kernel-allocated pages directly into user-space, bypassing the overhead of copy_to_user syscalls.
+* **Asynchronous Notification:** Implements the poll subsystem with wait-queues to allow user-space applications to sleep efficiently while waiting for data.
+* **Simulated DMA Engine:** A kernel timer_list simulates hardware interrupts, producing data bursts at configurable intervals (default: 50ms).
+* **Atomic Telemetry:** Uses atomic primitives (__sync_fetch_and_add) to track produced, consumed, and overflowed bytes across CPU cores without race conditions.
+* **Flow Control** Robust handling of buffer overflow (backpressure) scenarios with a dedicated overflow counter.
+---
 
- Directory Structure
+## Steps for execution
+ cd zero_copy_driver (after clonning the repository)
+ 
+ make
+ 
+ chmod +x ./scripts/load.sh ./scripts/unload.sh
 
-    /driver: Kernel module source code (my_device.c).
+**run driver using :**   ./scripts/load.sh
 
-    /app: User-space consumer application.
+**run user program  :**   ./app/consumer_app  ( press ctrl+c to break the execution )
 
-    /include: Shared header files defining the Ring Buffer metadata structure.
+**close the driver :**  ./scripts/unload.sh
 
-    /scripts: Utility scripts for loading/unloading the module.
+---
 
-    /Makefile: Comprehensive build system for both kernel and user components.
+## 🔐 Technical Implementation
 
-Technical Implementation Details
-Ring Buffer Metadata
+### Ring Buffer Metadata
+The kernel and user-space share a control structure located at the start of the mapped memory region:
 
-The kernel and user-space share a common understanding of the buffer via the rb_metadata structure:
-C
-
+```c
 struct rb_metadata {
-    unsigned int head;               // Managed by Kernel (Producer)
-    unsigned int tail;               // Managed by User (Consumer)
+    unsigned int head;               // Producer Index (Kernel)
+    unsigned int tail;               // Consumer Index (User)
     unsigned long total_bytes_produced;
-    unsigned long overflow_count;
+    unsigned long overflow_count;    // Dropped data telemetry
     unsigned long total_bytes_consumed;
-    char data[];                     // Flexible Array Member for data payload
+    char data[];                     // Flexible Array Member
 };
-
-Synchronization
-
-    Kernel: Uses smp_wmb() (Store Memory Barrier) to ensure data is committed to RAM before the head pointer is updated and the user is woken up.
-
-    User-space: Uses __sync_synchronize() (Full Memory Barrier) to ensure it sees the most recent data written by the DMA simulation.
-
-Performance & Results
-
-During testing with a 50ms production interval and 512-byte bursts:
-
-    CPU Usage: Negligible due to poll() based sleeping.
-
-    Reliability: 100% data integrity where Total Produced == Total Consumed in non-overflow conditions.
-
-    Backpressure: Correctly identifies and logs dropped bytes when the consumer is artificially slowed.
-
-Building and Running
-
-    Compile both driver and app:
-    Bash
-
-    make
-
-    Load the module:
-    Bash
-
-    sudo insmod driver/my_device.ko
-
-    Check device node permissions:
-    Bash
-
-    sudo chmod 666 /dev/my_device
-
-    Run the consumer:
-    Bash
-
-    ./app/consumer
-
-    Stop the simulation:
-    Press Ctrl+C to trigger a graceful shutdown and view telemetry stats.
