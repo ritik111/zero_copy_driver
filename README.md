@@ -33,6 +33,8 @@ A Linux kernel character device driver that implements a Zero-Copy Data Plane us
 
 **close the driver :**  ./scripts/unload.sh
 
+make clean
+
 ---
 
 ## 🔐 Technical Implementation
